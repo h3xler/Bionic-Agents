@@ -1,0 +1,89 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: livekit-dashboard-db-migrate
+  namespace: livekit
+  labels:
+    app: livekit-dashboard
+    component: database-migration
+spec:
+  template:
+    metadata:
+      labels:
+        app: livekit-dashboard
+        component: database-migration
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      - name: wait-for-db
+        image: postgres:17-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for database to be ready..."
+          until PGPASSWORD=$POSTGRES_PASSWORD psql -h $PGHOST -U $POSTGRES_USER -d livekit_dashboard -c '\q' 2>/dev/null; do
+            echo "Database is unavailable - sleeping"
+            sleep 2
+          done
+          echo "Database is ready!"
+        env:
+        - name: PGHOST
+          value: pg-haproxy-primary.pg.svc.cluster.local
+        - name: PGPORT
+          value: "5432"
+        - name: POSTGRES_USER
+          value: livekit
+        - name: POSTGRES_PASSWORD
+          value: L1v3K1tTh1515T0p53cr3t
+        - name: PGPASSWORD
+          value: L1v3K1tTh1515T0p53cr3t
+      containers:
+      - name: migrate
+        image: postgres:17-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          echo "🚀 Running database migrations..."
+          
+          # Extract connection details from DATABASE_URL
+          DB_URL="$DATABASE_URL"
+          DB_USER=$(echo "$DB_URL" | sed -n 's|.*://\([^:]*\):.*|\1|p')
+          DB_PASS=$(echo "$DB_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+          DB_HOST=$(echo "$DB_URL" | sed -n 's|.*@\([^:]*\):.*|\1|p')
+          DB_PORT=$(echo "$DB_URL" | sed -n 's|.*:\([0-9]*\)/.*|\1|p')
+          DB_NAME=$(echo "$DB_URL" | sed -n 's|.*/\([^?]*\).*|\1|p')
+          
+          echo "Connecting to: $DB_HOST:${DB_PORT:-5432}/$DB_NAME as $DB_USER"
+          
+          # Wait for database to be ready
+          until PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; do
+            echo "Database is unavailable - sleeping"
+            sleep 2
+          done
+          
+          echo "Database is ready! Running migrations..."
+          
+          # Run migration SQL from ConfigMap
+          echo "Executing migration SQL..."
+          PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME" -f /migrations/migration.sql
+          
+          echo "✅ Database migrations completed successfully!"
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: livekit-dashboard-db
+              key: DATABASE_URL
+        volumeMounts:
+        - name: migration-sql
+          mountPath: /migrations
+          readOnly: true
+      volumes:
+      - name: migration-sql
+        configMap:
+          name: livekit-dashboard-migration-sql

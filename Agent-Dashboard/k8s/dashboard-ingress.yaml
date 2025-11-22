@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: livekit-dashboard-ingress
+  namespace: livekit
+  annotations:
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "http,https"
+    konghq.com/strip-path: "false"
+    konghq.com/ssl-redirect: "true"
+    konghq.com/plugins: "kong-cors,kong-rate-limit"
+    # Cert-manager for automatic TLS certificate
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+  - hosts:
+    - live.bionicaisolutions.com
+    secretName: live-bionicaisolutions-com-tls
+  rules:
+  - host: live.bionicaisolutions.com
+    http:
+      paths:
+      - backend:
+          service:
+            name: livekit-dashboard
+            port:
+              number: 3000
+        path: /
+        pathType: Prefix
