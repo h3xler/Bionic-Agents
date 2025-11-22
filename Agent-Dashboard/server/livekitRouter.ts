@@ -1000,6 +1000,8 @@ export const livekitRouter = router({
         throw error;
       }
     }),
+
+  getTrackById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const db = await getDb();

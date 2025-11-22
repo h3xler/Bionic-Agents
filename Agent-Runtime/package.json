@@ -15,8 +15,8 @@
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
-    "@livekit/agents": "^0.8.0",
-    "@livekit/server-sdk": "^2.14.2",
+    "@livekit/agents": "^1.0.20",
+    "livekit-server-sdk": "^2.14.2",
     "drizzle-orm": "^0.44.5",
     "express": "^4.21.2",
     "nanoid": "^5.1.5",

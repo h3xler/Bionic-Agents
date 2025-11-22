@@ -19,7 +19,7 @@ app.use("/api/agents", agentsRouter);
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/metrics", metricsRouter);
 
-const port = config.runtime.apiPort;
+const port = config.runtime.apiPort || process.env.PORT || 8080;
 
 app.listen(port, () => {
   console.log(`Agent Runtime server listening on port ${port}`);
