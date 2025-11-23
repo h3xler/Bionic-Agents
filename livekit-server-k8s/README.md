@@ -43,3 +43,4 @@ kubectl delete namespace livekit
 - For production, you would need Redis for multi-node deployments
 - The RTC port range is 50000-60000
 
+

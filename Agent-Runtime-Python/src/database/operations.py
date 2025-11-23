@@ -209,3 +209,4 @@ async def get_session_metrics(
         "totalCost": float(session_metric.total_cost) if session_metric.total_cost else 0.0,
     }
 
+

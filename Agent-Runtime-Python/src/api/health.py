@@ -50,3 +50,4 @@ async def readiness_check(db: AsyncSession = Depends(get_db)):
             detail={"status": "not ready", "reason": f"database not connected: {str(e)}"}
         )
 
+

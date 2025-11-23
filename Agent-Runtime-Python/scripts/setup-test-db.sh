@@ -46,3 +46,4 @@ echo ""
 echo "To stop the database:"
 echo "  docker-compose -f docker-compose.test.yml down"
 
+

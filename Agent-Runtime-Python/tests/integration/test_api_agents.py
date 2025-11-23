@@ -128,3 +128,4 @@ async def test_unregister_agent(client):
     data = response.json()
     assert data["success"] is True
 
+

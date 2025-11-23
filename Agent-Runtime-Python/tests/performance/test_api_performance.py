@@ -44,3 +44,4 @@ def test_get_agent_status_performance(client):
     # Get status should be fast (< 100ms)
     assert elapsed < 0.1, f"Get agent status took {elapsed}s, expected < 0.1s"
 
+

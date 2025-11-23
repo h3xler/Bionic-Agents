@@ -191,3 +191,4 @@ async def test_agent_status_with_livekit(client, sample_agent_config, livekit_co
     assert "activeSessions" in status_data
     assert "maxSessions" in status_data
 
+

@@ -35,3 +35,4 @@ def test_readiness_check(client):
     else:
         assert data["status"] == "not ready"
 
+

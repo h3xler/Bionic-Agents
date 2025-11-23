@@ -278,3 +278,4 @@ async def test_multiple_agents_livekit(client, livekit_config):
         )
         assert unregister_response.status_code == 200
 
+

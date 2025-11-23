@@ -149,3 +149,4 @@ async def test_agent_with_bithuman_avatar(client):
     assert instance is not None
     assert instance.config.get("avatarModel") == "bithuman-model-1"
 
+

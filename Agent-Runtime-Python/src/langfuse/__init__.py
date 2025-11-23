@@ -1,2 +1,3 @@
 """LangFuse client for observability."""
 
+

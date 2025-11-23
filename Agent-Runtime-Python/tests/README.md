@@ -99,3 +99,4 @@ E2E tests require:
 - Database transactions are rolled back after each test
 - Coverage target: 80% (currently set to 30% for initial development)
 
+

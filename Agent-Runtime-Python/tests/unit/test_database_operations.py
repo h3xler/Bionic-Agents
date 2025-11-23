@@ -160,3 +160,4 @@ async def test_get_session_metrics_not_found(db_session):
     
     assert metrics is None
 
+
