@@ -1,28 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: livekit-dashboard
+  name: agent-builder
   namespace: livekit
   labels:
-    app: livekit-dashboard
+    app: agent-builder
+    component: builder
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: livekit-dashboard
+      app: agent-builder
   template:
     metadata:
       labels:
-        app: livekit-dashboard
+        app: agent-builder
+        component: builder
     spec:
       containers:
-      - name: dashboard
-        # Image from private registry
-        image: agent-dashboard:latest
+      - name: builder
+        image: agent-builder:latest
         imagePullPolicy: Never
         ports:
-        - containerPort: 3000
-          name: http
+        - name: http
+          containerPort: 3000
+          protocol: TCP
         env:
         - name: DATABASE_URL
           valueFrom:
@@ -44,10 +46,6 @@ spec:
             secretKeyRef:
               name: livekit-secrets
               key: api-secret
-        - name: NODE_ENV
-          value: "production"
-        - name: PORT
-          value: "3000"
         - name: AGENT_RUNTIME_API_URL
           value: "http://agent-runtime-python.livekit:8080"
         - name: AGENT_RUNTIME_API_KEY
@@ -55,23 +53,27 @@ spec:
             secretKeyRef:
               name: agent-runtime-secrets
               key: api-key
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "1Gi"
-            cpu: "500m"
+        - name: PORT
+          value: "3000"
+        - name: NODE_ENV
+          value: "production"
         livenessProbe:
           httpGet:
-            path: /api/trpc/livekit.getSessionStats
-            port: 3000
+            path: /health
+            port: http
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
-            path: /api/trpc/livekit.getSessionStats
-            port: 3000
+            path: /health
+            port: http
           initialDelaySeconds: 10
           periodSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
 

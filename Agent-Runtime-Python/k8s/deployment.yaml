@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-runtime-python
+  namespace: livekit
+  labels:
+    app: agent-runtime-python
+    component: runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-runtime-python
+  template:
+    metadata:
+      labels:
+        app: agent-runtime-python
+        component: runtime
+    spec:
+      containers:
+      - name: agent-runtime-api
+        image: agent-runtime-python:latest
+        imagePullPolicy: Never
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: database-url
+        - name: LIVEKIT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agent-runtime-config
+              key: livekit-url
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: livekit-api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: livekit-api-secret
+        - name: RUNTIME_API_PORT
+          value: "8080"
+        - name: RUNTIME_HOST
+          value: "0.0.0.0"
+        - name: RUNTIME_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: api-key
+        - name: NODE_ENV
+          value: "production"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      - name: agent-server
+        image: agent-runtime-python:latest
+        imagePullPolicy: Never
+        command: ["python3", "-c", "import sys; sys.path.insert(0, '/app'); import importlib.util; spec = importlib.util.spec_from_file_location('agent_server', '/app/src/livekit/agent_server.py'); agent_server = importlib.util.module_from_spec(spec); spec.loader.exec_module(agent_server); agent_server.run_agent_server()"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: database-url
+        - name: LIVEKIT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: agent-runtime-config
+              key: livekit-url
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: livekit-api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: agent-runtime-secrets
+              key: livekit-api-secret
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      restartPolicy: Always
+

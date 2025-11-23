@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-runtime-config
+  namespace: livekit
+data:
+  livekit-url: "ws://livekit-service.livekit:7880"
+
