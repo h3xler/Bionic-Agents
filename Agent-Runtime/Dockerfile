@@ -8,7 +8,7 @@ WORKDIR /app
 # Copy package files
 COPY package.json pnpm-lock.yaml* ./
 
-# Install dependencies
+# Install ALL dependencies (including dev for build)
 RUN pnpm install --frozen-lockfile
 
 # Build stage
@@ -16,15 +16,17 @@ FROM base AS build
 COPY . .
 RUN pnpm build
 
-# Production stage
+# Production stage - keep all dependencies for runtime
 FROM node:22-alpine AS production
 
 WORKDIR /app
 
-# Copy package files and install production dependencies
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy package files and install ALL dependencies
 COPY package.json pnpm-lock.yaml* ./
-RUN corepack enable && corepack prepare pnpm@latest --activate && \
-    pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile
 
 # Copy built application
 COPY --from=build /app/dist ./dist
@@ -41,4 +43,3 @@ ENV NODE_ENV=production
 ENV PORT=8080
 
 CMD ["node", "dist/server.js"]
-
