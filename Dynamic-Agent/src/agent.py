@@ -16,27 +16,31 @@ AGENT_BUILDER_API_URL = os.getenv("AGENT_BUILDER_API_URL", "http://agent_builder
 DEFAULT_AGENT_ID = os.getenv("DEFAULT_AGENT_ID", "1")
 
 # Map user-friendly model names to realtime audio API model names
+# For Gemini Live API (bidiGenerateContent), only specific models are supported
 MODEL_NAME_MAPPING = {
-    "gemini-2.5-flash": "gemini-2.5-flash-preview-native-audio-dialog",
-    "gemini-2.5-pro": "gemini-2.5-pro-preview-native-audio-dialog",
-    "gemini-2.0-flash": "gemini-2.0-flash-live-001",
-    "gemini-1.5-flash": "gemini-2.0-flash-live-001",
-    "gemini-1.5-pro": "gemini-2.0-flash-live-001",
+    "gemini-2.5-flash": "gemini-2.0-flash-exp",
+    "gemini-2.5-pro": "gemini-2.0-flash-exp",
+    "gemini-2.0-flash": "gemini-2.0-flash-exp",
+    "gemini-1.5-flash": "gemini-2.0-flash-exp",
+    "gemini-1.5-pro": "gemini-2.0-flash-exp",
 }
+
+# Default model for Gemini Live API
+DEFAULT_REALTIME_MODEL = "gemini-2.0-flash-exp"
 
 
 def get_realtime_model_name(model: str) -> str:
     """Convert user model name to realtime audio API model name"""
     if not model:
-        return "gemini-2.5-flash-preview-native-audio-dialog"
-    # If already a native audio model, return as-is
-    if "native-audio" in model or "live" in model:
+        return DEFAULT_REALTIME_MODEL
+    # If already a supported live model, return as-is
+    if model in ["gemini-2.0-flash-exp", "gemini-2.0-flash-live-001"]:
         return model
     # Check mapping
     if model in MODEL_NAME_MAPPING:
         return MODEL_NAME_MAPPING[model]
     # Default fallback
-    return "gemini-2.5-flash-preview-native-audio-dialog"
+    return DEFAULT_REALTIME_MODEL
 
 
 @dataclass
@@ -125,7 +129,7 @@ def get_default_config() -> AgentConfig:
         name="Default Assistant",
         system_prompt="You are a helpful AI assistant. You speak Turkish fluently.",
         initial_greeting="Merhaba! Size nasıl yardımcı olabilirim?",
-        model="gemini-2.5-flash-preview-native-audio-dialog",
+        model=DEFAULT_REALTIME_MODEL,
         voice="Zephyr",
         temperature=0.6,
         language="tr",
