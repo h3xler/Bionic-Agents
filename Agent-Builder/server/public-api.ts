@@ -4,7 +4,7 @@
  */
 
 import type { Express } from "express";
-import { getAgentById } from "../db";
+import { getAgentById } from "./db";
 
 export function registerPublicApiRoutes(app: Express) {
     /**
@@ -40,7 +40,7 @@ export function registerPublicApiRoutes(app: Express) {
                 llmModel: agent.llmModel,
                 llmConfig: agent.llmConfig ? JSON.parse(agent.llmConfig) : null,
                 systemPrompt: agent.systemPrompt,
-                initialGreeting: (agent as any).initialGreeting || "",
+                initialGreeting: (agent as any).initial_greeting || "",
                 temperature: (agent as any).temperature || 0.6,
                 visionEnabled: agent.visionEnabled === 1,
                 screenShareEnabled: agent.screenShareEnabled === 1,
@@ -53,29 +53,6 @@ export function registerPublicApiRoutes(app: Express) {
             });
         } catch (error: any) {
             console.error("[Public API] Error fetching agent config:", error);
-            res.status(500).json({ error: "Internal server error" });
-        }
-    });
-
-    /**
-     * GET /api/agents
-     * List all agents (for debugging)
-     */
-    app.get("/api/agents", async (req, res) => {
-        try {
-            // Return a simple list of agent IDs for discovery
-            const { getAllAgents } = await import("../db");
-            const agents = await getAllAgents();
-
-            res.json({
-                agents: agents.map(a => ({
-                    id: a.id,
-                    name: a.name,
-                    deploymentStatus: a.deploymentStatus,
-                }))
-            });
-        } catch (error: any) {
-            console.error("[Public API] Error listing agents:", error);
             res.status(500).json({ error: "Internal server error" });
         }
     });
