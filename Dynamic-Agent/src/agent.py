@@ -15,6 +15,29 @@ logger = logging.getLogger("dynamic-agent")
 AGENT_BUILDER_API_URL = os.getenv("AGENT_BUILDER_API_URL", "http://agent_builder:3000")
 DEFAULT_AGENT_ID = os.getenv("DEFAULT_AGENT_ID", "1")
 
+# Map user-friendly model names to realtime audio API model names
+MODEL_NAME_MAPPING = {
+    "gemini-2.5-flash": "gemini-2.5-flash-preview-native-audio-dialog",
+    "gemini-2.5-pro": "gemini-2.5-pro-preview-native-audio-dialog",
+    "gemini-2.0-flash": "gemini-2.0-flash-live-001",
+    "gemini-1.5-flash": "gemini-2.0-flash-live-001",
+    "gemini-1.5-pro": "gemini-2.0-flash-live-001",
+}
+
+
+def get_realtime_model_name(model: str) -> str:
+    """Convert user model name to realtime audio API model name"""
+    if not model:
+        return "gemini-2.5-flash-preview-native-audio-dialog"
+    # If already a native audio model, return as-is
+    if "native-audio" in model or "live" in model:
+        return model
+    # Check mapping
+    if model in MODEL_NAME_MAPPING:
+        return MODEL_NAME_MAPPING[model]
+    # Default fallback
+    return "gemini-2.5-flash-preview-native-audio-dialog"
+
 
 @dataclass
 class AgentConfig:
@@ -42,13 +65,14 @@ async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
             
             if response.status_code == 200:
                 data = response.json()
+                raw_model = data.get("llmModel", "")
                 return AgentConfig(
                     agent_id=data.get("id", int(agent_id)),
                     name=data.get("name", "Assistant"),
                     system_prompt=data.get("systemPrompt", "You are a helpful assistant."),
                     initial_greeting=data.get("initialGreeting", ""),
-                    model=data.get("llmModel", "gemini-2.5-flash-preview-native-audio-dialog"),
-                    voice=data.get("voiceId", "Zephyr"),
+                    model=get_realtime_model_name(raw_model),
+                    voice=data.get("voiceId", "") or "Zephyr",
                     temperature=float(data.get("temperature", 0.6)),
                     language=data.get("languages", "en"),
                     stt_provider=data.get("sttProvider", "google"),
@@ -80,10 +104,10 @@ def get_agent_id_from_room(room: rtc.Room) -> str:
     
     # Define room name patterns -> agent_id mapping
     patterns = {
-        "support": "1",      # Support agent
-        "translator": "2",   # Translator agent
-        "phone": "3",        # Phone support agent
-        "sip": "3",          # SIP calls use phone agent
+        "support": "1",
+        "translator": "2",
+        "phone": "3",
+        "sip": "3",
     }
     
     for pattern, agent_id in patterns.items():
