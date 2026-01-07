@@ -5,7 +5,7 @@ import httpx
 from typing import Optional
 from dataclasses import dataclass
 from livekit import agents, rtc
-from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent
+from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent, room_io, mcp
 from livekit.plugins import google, silero
 from google.genai import types
 
@@ -29,6 +29,9 @@ class AgentConfig:
     model: str
     voice: str
     temperature: float
+    vision_enabled: bool
+    screen_share_enabled: bool
+    mcp_gateway_url: str
 
 
 async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
@@ -49,6 +52,9 @@ async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
                     model=DEFAULT_REALTIME_MODEL,  # Always use native audio model
                     voice=data.get("voiceId", "") or "Zephyr",
                     temperature=float(data.get("temperature", 0.6)),
+                    vision_enabled=data.get("visionEnabled", False),
+                    screen_share_enabled=data.get("screenShareEnabled", False),
+                    mcp_gateway_url=data.get("mcpGatewayUrl", "") or "",
                 )
             else:
                 logger.warning(f"Failed to fetch config: {response.status_code}")
@@ -94,14 +100,20 @@ def get_default_config() -> AgentConfig:
         model=DEFAULT_REALTIME_MODEL,
         voice="Zephyr",
         temperature=0.6,
+        vision_enabled=False,
+        screen_share_enabled=False,
+        mcp_gateway_url="",
     )
 
 
 class DynamicAssistant(Agent):
     """Dynamic assistant that uses configuration from Agent-Builder"""
     
-    def __init__(self, config: AgentConfig) -> None:
-        super().__init__(instructions=config.system_prompt)
+    def __init__(self, config: AgentConfig, mcp_servers=None) -> None:
+        super().__init__(
+            instructions=config.system_prompt,
+            mcp_servers=mcp_servers or [],
+        )
         self.config = config
 
 
@@ -127,6 +139,7 @@ async def entrypoint(ctx: JobContext):
         config = get_default_config()
     
     logger.info(f"Agent config: name={config.name}, model={config.model}, voice={config.voice}")
+    logger.info(f"Features: vision={config.vision_enabled}, screen_share={config.screen_share_enabled}, mcp={bool(config.mcp_gateway_url)}")
     
     # Create the model based on config
     model = google.realtime.RealtimeModel(
@@ -137,10 +150,36 @@ async def entrypoint(ctx: JobContext):
         thinking_config=types.ThinkingConfig(include_thoughts=False),
     )
     
-    # Create and start session (EXACTLY like original working version)
-    session = AgentSession(llm=model, vad=ctx.proc.userdata["vad"])
+    # Setup MCP servers if configured
+    mcp_servers = []
+    if config.mcp_gateway_url:
+        logger.info(f"Connecting to MCP Gateway: {config.mcp_gateway_url}")
+        mcp_servers.append(mcp.MCPServerHTTP(config.mcp_gateway_url))
     
-    await session.start(room=ctx.room, agent=DynamicAssistant(config))
+    # Create session with MCP support
+    session = AgentSession(
+        llm=model,
+        vad=ctx.proc.userdata["vad"],
+        mcp_servers=mcp_servers if mcp_servers else None,
+    )
+    
+    # Check if vision is enabled
+    video_enabled = config.vision_enabled or config.screen_share_enabled
+    
+    if video_enabled:
+        logger.info("Vision enabled - activating video input")
+        await session.start(
+            room=ctx.room,
+            agent=DynamicAssistant(config, mcp_servers),
+            room_options=room_io.RoomOptions(
+                video_input=True,
+            ),
+        )
+    else:
+        await session.start(
+            room=ctx.room,
+            agent=DynamicAssistant(config, mcp_servers),
+        )
     
     # Send initial greeting if configured
     if config.initial_greeting:
