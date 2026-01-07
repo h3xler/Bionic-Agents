@@ -6,11 +6,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { trpc } from "@/lib/trpc";
 import { Loader2, Rocket, Save, TestTube } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
+
+// Google Gemini models for LiveKit realtime audio
+const GEMINI_MODELS = [
+  { value: "gemini-2.5-flash-native-audio-preview-09-2025", label: "Gemini 2.5 Flash Native Audio (Recommended)", hasVision: true },
+  { value: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash Exp", hasVision: true },
+  { value: "gemini-2.0-flash-live-001", label: "Gemini 2.0 Flash Live", hasVision: true },
+  { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash", hasVision: false },
+  { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro", hasVision: false },
+];
 
 export default function AgentConfig() {
   const [, params] = useRoute("/agents/:id");
@@ -46,17 +56,19 @@ export default function AgentConfig() {
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    sttProvider: "deepgram",
-    ttsProvider: "elevenlabs",
+    sttProvider: "google",
+    ttsProvider: "google",
     voiceId: "",
-    llmProvider: "openai",
-    llmModel: "gpt-4o-mini",
+    llmProvider: "gemini",
+    llmModel: "gemini-2.5-flash-native-audio-preview-09-2025",
     visionEnabled: false,
     screenShareEnabled: false,
     transcribeEnabled: false,
-    languages: "en",
+    languages: "tr",
     avatarModel: "",
     systemPrompt: "You are a helpful AI assistant.",
+    initialGreeting: "",
+    temperature: 0.6,
     mcpGatewayUrl: "",
   });
 
@@ -65,17 +77,19 @@ export default function AgentConfig() {
       setFormData({
         name: agent.name,
         description: agent.description || "",
-        sttProvider: agent.sttProvider,
-        ttsProvider: agent.ttsProvider,
+        sttProvider: agent.sttProvider || "google",
+        ttsProvider: agent.ttsProvider || "google",
         voiceId: agent.voiceId || "",
-        llmProvider: agent.llmProvider,
-        llmModel: agent.llmModel || "gpt-4o-mini",
+        llmProvider: agent.llmProvider || "gemini",
+        llmModel: agent.llmModel || "gemini-2.5-flash-native-audio-preview-09-2025",
         visionEnabled: agent.visionEnabled === 1,
         screenShareEnabled: agent.screenShareEnabled === 1,
         transcribeEnabled: agent.transcribeEnabled === 1,
-        languages: agent.languages || "en",
+        languages: agent.languages || "tr",
         avatarModel: agent.avatarModel || "",
         systemPrompt: agent.systemPrompt || "You are a helpful AI assistant.",
+        initialGreeting: (agent as any).initial_greeting || (agent as any).initialGreeting || "",
+        temperature: (agent as any).temperature || 0.6,
         mcpGatewayUrl: agent.mcpGatewayUrl || "",
       });
     }
@@ -83,7 +97,7 @@ export default function AgentConfig() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const payload = {
       ...formData,
       visionEnabled: formData.visionEnabled ? 1 : 0,
@@ -97,6 +111,9 @@ export default function AgentConfig() {
       await updateAgent.mutateAsync({ id: agentId, ...payload });
     }
   };
+
+  // Get info about selected model
+  const selectedModel = GEMINI_MODELS.find(m => m.value === formData.llmModel);
 
   if (!isAuthenticated) {
     navigate("/");
@@ -119,7 +136,7 @@ export default function AgentConfig() {
             {isNew ? "Create New Agent" : "Configure Agent"}
           </h1>
           <p className="text-muted-foreground mt-2">
-            Configure your LiveKit agent with custom STT, TTS, LLM, and more
+            Configure your LiveKit agent with Google Gemini
           </p>
         </div>
 
@@ -154,103 +171,75 @@ export default function AgentConfig() {
             </CardContent>
           </Card>
 
-          {/* Speech-to-Text */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Speech-to-Text (STT)</CardTitle>
-              <CardDescription>Configure speech recognition</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sttProvider">STT Provider *</Label>
-                <Select
-                  value={formData.sttProvider}
-                  onValueChange={(value) => setFormData({ ...formData, sttProvider: value })}
-                >
-                  <SelectTrigger id="sttProvider">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="deepgram">Deepgram</SelectItem>
-                    <SelectItem value="speechmatics">Speechmatics</SelectItem>
-                    <SelectItem value="google">Google Speech-to-Text</SelectItem>
-                    <SelectItem value="azure">Azure Speech</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Text-to-Speech */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Text-to-Speech (TTS)</CardTitle>
-              <CardDescription>Configure voice synthesis</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="ttsProvider">TTS Provider *</Label>
-                <Select
-                  value={formData.ttsProvider}
-                  onValueChange={(value) => setFormData({ ...formData, ttsProvider: value })}
-                >
-                  <SelectTrigger id="ttsProvider">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                    <SelectItem value="speechmatics">Speechmatics</SelectItem>
-                    <SelectItem value="cartesia">Cartesia</SelectItem>
-                    <SelectItem value="google">Google Text-to-Speech</SelectItem>
-                    <SelectItem value="azure">Azure Speech</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="voiceId">Voice ID</Label>
-                <Input
-                  id="voiceId"
-                  value={formData.voiceId}
-                  onChange={(e) => setFormData({ ...formData, voiceId: e.target.value })}
-                  placeholder="Voice identifier from your TTS provider"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* LLM Configuration */}
+          {/* LLM Configuration - Simplified for Google Gemini */}
           <Card>
             <CardHeader>
               <CardTitle>Language Model (LLM)</CardTitle>
-              <CardDescription>Configure the AI brain</CardDescription>
+              <CardDescription>Select the Google Gemini model for your agent</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="llmProvider">LLM Provider *</Label>
+                <Label htmlFor="llmModel">Model *</Label>
                 <Select
-                  value={formData.llmProvider}
-                  onValueChange={(value) => setFormData({ ...formData, llmProvider: value })}
+                  value={formData.llmModel}
+                  onValueChange={(value) => setFormData({ ...formData, llmModel: value })}
                 >
-                  <SelectTrigger id="llmProvider">
-                    <SelectValue />
+                  <SelectTrigger id="llmModel">
+                    <SelectValue placeholder="Select a model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="openai">OpenAI</SelectItem>
-                    <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="gemini">Google Gemini</SelectItem>
-                    <SelectItem value="realtime">OpenAI Realtime API</SelectItem>
+                    {GEMINI_MODELS.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label} {model.hasVision ? "👁️" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedModel && !selectedModel.hasVision && formData.visionEnabled && (
+                  <p className="text-sm text-yellow-600">
+                    ⚠️ This model doesn't support vision. Vision will be disabled.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="voiceId">Voice (Gemini Voices)</Label>
+                <Select
+                  value={formData.voiceId || "Zephyr"}
+                  onValueChange={(value) => setFormData({ ...formData, voiceId: value })}
+                >
+                  <SelectTrigger id="voiceId">
+                    <SelectValue placeholder="Select a voice" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Zephyr">Zephyr (Calm, Male)</SelectItem>
+                    <SelectItem value="Puck">Puck (Energetic, Male)</SelectItem>
+                    <SelectItem value="Charon">Charon (Serious, Male)</SelectItem>
+                    <SelectItem value="Kore">Kore (Friendly, Female)</SelectItem>
+                    <SelectItem value="Fenrir">Fenrir (Deep, Male)</SelectItem>
+                    <SelectItem value="Aoede">Aoede (Warm, Female)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="llmModel">Model</Label>
-                <Input
-                  id="llmModel"
-                  value={formData.llmModel}
-                  onChange={(e) => setFormData({ ...formData, llmModel: e.target.value })}
-                  placeholder="gpt-4o-mini"
+                <Label htmlFor="temperature">
+                  Temperature: {formData.temperature.toFixed(1)}
+                </Label>
+                <Slider
+                  id="temperature"
+                  value={[formData.temperature]}
+                  onValueChange={([value]) => setFormData({ ...formData, temperature: value })}
+                  min={0}
+                  max={1}
+                  step={0.1}
+                  className="w-full"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Lower = more focused, Higher = more creative
+                </p>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="systemPrompt">System Prompt / Persona</Label>
                 <Textarea
@@ -260,6 +249,20 @@ export default function AgentConfig() {
                   rows={6}
                   placeholder="You are a helpful AI assistant..."
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="initialGreeting">Initial Greeting</Label>
+                <Textarea
+                  id="initialGreeting"
+                  value={formData.initialGreeting}
+                  onChange={(e) => setFormData({ ...formData, initialGreeting: e.target.value })}
+                  rows={2}
+                  placeholder="Hello! I'm your AI assistant. How can I help you today?"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Agent will say this when joining a room
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -273,33 +276,35 @@ export default function AgentConfig() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Vision (Gemini Vision API)</Label>
+                  <Label>Vision (Camera Input)</Label>
                   <p className="text-sm text-muted-foreground">
-                    Enable visual understanding capabilities
+                    Enable visual understanding from camera
                   </p>
                 </div>
                 <Switch
                   checked={formData.visionEnabled}
                   onCheckedChange={(checked) => setFormData({ ...formData, visionEnabled: checked })}
+                  disabled={selectedModel && !selectedModel.hasVision}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Screen Share</Label>
                   <p className="text-sm text-muted-foreground">
-                    Allow screen sharing in sessions
+                    Analyze screen sharing content
                   </p>
                 </div>
                 <Switch
                   checked={formData.screenShareEnabled}
                   onCheckedChange={(checked) => setFormData({ ...formData, screenShareEnabled: checked })}
+                  disabled={selectedModel && !selectedModel.hasVision}
                 />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Transcription</Label>
                   <p className="text-sm text-muted-foreground">
-                    Record and transcribe conversations
+                    Record and transcribe conversations (via LiveKit Egress)
                   </p>
                 </div>
                 <Switch
@@ -310,7 +315,7 @@ export default function AgentConfig() {
             </CardContent>
           </Card>
 
-          {/* Multi-lingual & Avatar */}
+          {/* Localization & Avatar */}
           <Card>
             <CardHeader>
               <CardTitle>Localization & Avatar</CardTitle>
@@ -323,7 +328,7 @@ export default function AgentConfig() {
                   id="languages"
                   value={formData.languages}
                   onChange={(e) => setFormData({ ...formData, languages: e.target.value })}
-                  placeholder="en, es, fr"
+                  placeholder="tr, en"
                 />
               </div>
               <div className="space-y-2">
@@ -342,7 +347,7 @@ export default function AgentConfig() {
           <Card>
             <CardHeader>
               <CardTitle>MCP Gateway</CardTitle>
-              <CardDescription>Model Context Protocol integration</CardDescription>
+              <CardDescription>Model Context Protocol integration (e.g., n8n)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -351,7 +356,7 @@ export default function AgentConfig() {
                   id="mcpGatewayUrl"
                   value={formData.mcpGatewayUrl}
                   onChange={(e) => setFormData({ ...formData, mcpGatewayUrl: e.target.value })}
-                  placeholder="https://mcp-gateway.example.com"
+                  placeholder="https://your-n8n-instance.com/mcp"
                 />
               </div>
             </CardContent>
