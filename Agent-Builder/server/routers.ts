@@ -5,7 +5,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 
 export const appRouter = router({
-    // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
+  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
@@ -27,18 +27,18 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const { generateLiveKitToken, getLiveKitUrl } = await import("./livekit");
         const { getAgentById } = await import("./db");
-        
+
         const agent = await getAgentById(input.agentId);
         if (!agent) {
           throw new Error("Agent not found");
         }
-        
+
         const roomName = `agent-${agent.id}-room`;
         const participantName = input.participantName || "Guest";
-        
+
         const token = await generateLiveKitToken(roomName, participantName);
         const url = await getLiveKitUrl();
-        
+
         return {
           token,
           url,
@@ -57,7 +57,7 @@ export const appRouter = router({
       const { getAllSettings } = await import("./settings");
       return await getAllSettings();
     }),
-    
+
     update: protectedProcedure
       .input(z.object({
         key: z.string(),
@@ -78,7 +78,7 @@ export const appRouter = router({
     getCurrent: protectedProcedure.query(async ({ ctx }) => {
       const { getTenantByUserId } = await import("./db");
       const tenant = await getTenantByUserId(ctx.user.id);
-      
+
       // Auto-create tenant if doesn't exist
       if (!tenant) {
         const { createTenant } = await import("./db");
@@ -90,10 +90,10 @@ export const appRouter = router({
         });
         return await getTenantByUserId(ctx.user.id);
       }
-      
+
       return tenant;
     }),
-    
+
     updateQuota: protectedProcedure
       .input(z.object({
         resourceQuota: z.object({
@@ -105,18 +105,18 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { getTenantByUserId, updateTenant } = await import("./db");
         const tenant = await getTenantByUserId(ctx.user.id);
-        
+
         if (!tenant) {
           throw new Error("Tenant not found");
         }
-        
+
         const currentQuota = tenant.resourceQuota ? JSON.parse(tenant.resourceQuota) : {};
         const updatedQuota = { ...currentQuota, ...input.resourceQuota };
-        
+
         await updateTenant(tenant.id, {
           resourceQuota: JSON.stringify(updatedQuota),
         });
-        
+
         return { success: true };
       }),
   }),
@@ -126,20 +126,20 @@ export const appRouter = router({
       const { getAgentsByUserId } = await import("./db");
       return getAgentsByUserId(ctx.user.id);
     }),
-    
+
     get: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => {
         const { getAgentById } = await import("./db");
         const agent = await getAgentById(input.id);
-        
+
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         return agent;
       }),
-    
+
     create: protectedProcedure
       .input(z.object({
         name: z.string().min(1).max(255),
@@ -158,13 +158,15 @@ export const appRouter = router({
         languages: z.string().optional(),
         avatarModel: z.string().optional(),
         systemPrompt: z.string().optional(),
+        initialGreeting: z.string().optional(),
+        temperature: z.number().min(0).max(2).default(0.6),
         mcpGatewayUrl: z.string().optional(),
         mcpConfig: z.string().optional(),
         widgetConfig: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const { createAgent, getTenantByUserId, createTenant } = await import("./db");
-        
+
         // Ensure tenant exists
         let tenant = await getTenantByUserId(ctx.user.id);
         if (!tenant) {
@@ -176,11 +178,11 @@ export const appRouter = router({
           });
           tenant = await getTenantByUserId(ctx.user.id);
         }
-        
+
         if (!tenant) {
           throw new Error("Failed to create tenant");
         }
-        
+
         const agentId = await createAgent({
           ...input,
           userId: ctx.user.id,
@@ -189,7 +191,7 @@ export const appRouter = router({
         });
         return { id: agentId };
       }),
-    
+
     update: protectedProcedure
       .input(z.object({
         id: z.number(),
@@ -209,6 +211,8 @@ export const appRouter = router({
         languages: z.string().optional(),
         avatarModel: z.string().optional(),
         systemPrompt: z.string().optional(),
+        initialGreeting: z.string().optional(),
+        temperature: z.number().min(0).max(2).optional(),
         mcpGatewayUrl: z.string().optional(),
         mcpConfig: z.string().optional(),
         deploymentStatus: z.enum(["draft", "deploying", "deployed", "failed", "stopped"]).optional(),
@@ -219,73 +223,73 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { getAgentById, updateAgent } = await import("./db");
         const agent = await getAgentById(input.id);
-        
+
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         const { id, ...updates } = input;
         await updateAgent(id, updates);
         return { success: true };
       }),
-    
+
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const { getAgentById, deleteAgent } = await import("./db");
         const agent = await getAgentById(input.id);
-        
+
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         await deleteAgent(input.id);
         return { success: true };
       }),
-    
+
     generateManifest: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const { getAgentById, updateAgent } = await import("./db");
         const { generateK8sManifests, combineManifests, DeploymentMode } = await import("./k8s");
-        
+
         const agent = await getAgentById(input.id);
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         const mode = agent.deploymentMode === 'dedicated' ? DeploymentMode.DEDICATED : DeploymentMode.SHARED;
         const manifests = await generateK8sManifests(agent, mode);
         const combinedManifest = combineManifests(manifests);
-        
+
         // Save manifest to database
         await updateAgent(input.id, {
           kubernetesManifest: combinedManifest,
         });
-        
+
         return { manifest: combinedManifest };
       }),
-    
+
     deploy: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const { getAgentById, updateAgent } = await import("./db");
         const { deployAgent } = await import("./k8s-client");
-        
+
         const agent = await getAgentById(input.id);
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         // Update status to deploying
         await updateAgent(input.id, {
           deploymentStatus: "deploying",
         });
-        
+
         try {
           // Deploy to Kubernetes cluster
           const result = await deployAgent(agent);
-          
+
           if (result.success) {
             await updateAgent(input.id, {
               deploymentStatus: "deployed",
@@ -313,22 +317,22 @@ export const appRouter = router({
           throw new Error(`Deployment failed: ${error.message}`);
         }
       }),
-    
+
     undeploy: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input, ctx }) => {
         const { getAgentById, updateAgent } = await import("./db");
         const { undeployAgent } = await import("./k8s-client");
-        
+
         const agent = await getAgentById(input.id);
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         try {
           // Undeploy from Kubernetes cluster
           const result = await undeployAgent(input.id);
-          
+
           if (result.success) {
             await updateAgent(input.id, {
               deploymentStatus: "stopped",
@@ -348,22 +352,22 @@ export const appRouter = router({
           throw new Error(`Undeployment failed: ${error.message}`);
         }
       }),
-    
+
     getDeploymentStatus: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input, ctx }) => {
         const { getAgentById } = await import("./db");
         const { getAgentDeploymentStatus } = await import("./k8s-client");
-        
+
         const agent = await getAgentById(input.id);
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         const status = await getAgentDeploymentStatus(input.id);
         return status;
       }),
-    
+
     getLogs: protectedProcedure
       .input(z.object({
         id: z.number(),
@@ -372,16 +376,16 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         const { getAgentById } = await import("./db");
         const { getAgentLogs } = await import("./k8s-client");
-        
+
         const agent = await getAgentById(input.id);
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         const logs = await getAgentLogs(input.id, input.tailLines || 100);
         return logs;
       }),
-    
+
     generateWidget: protectedProcedure
       .input(z.object({
         id: z.number(),
@@ -394,23 +398,23 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { getAgentById, updateAgent } = await import("./db");
         const { generateWidgetSnippet, saveWidgetConfig } = await import("./widget");
-        
+
         const agent = await getAgentById(input.id);
         if (!agent || agent.userId !== ctx.user.id) {
           throw new Error("Agent not found or access denied");
         }
-        
+
         const { id, ...widgetConfig } = input;
         const baseUrl = process.env.VITE_FRONTEND_FORGE_API_URL || "https://api.example.com";
         const snippet = generateWidgetSnippet(agent, baseUrl, widgetConfig);
         const configJson = saveWidgetConfig(widgetConfig);
-        
+
         // Save widget configuration and snippet to database
         await updateAgent(id, {
           widgetConfig: configJson,
           widgetSnippet: snippet,
         });
-        
+
         return { snippet, config: widgetConfig };
       }),
   }),
