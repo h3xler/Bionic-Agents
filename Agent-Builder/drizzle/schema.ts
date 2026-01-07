@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, text, timestamp, varchar, serial } from "drizzle-orm/pg-core";
+import { integer, pgEnum, pgTable, text, timestamp, varchar, serial, real } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
@@ -55,39 +55,45 @@ export const agents = pgTable("agents", {
   tenantId: integer("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  
+
   // STT Configuration
   sttProvider: varchar("stt_provider", { length: 64 }).notNull(), // deepgram, speechmatics, etc.
   sttConfig: text("stt_config"), // JSON config for STT provider
-  
+
   // TTS Configuration
   ttsProvider: varchar("tts_provider", { length: 64 }).notNull(), // elevenlabs, speechmatics, cartesia
   ttsConfig: text("tts_config"), // JSON config for TTS provider
   voiceId: varchar("voice_id", { length: 255 }), // Selected voice ID
-  
+
   // LLM Configuration
   llmProvider: varchar("llm_provider", { length: 64 }).notNull(), // openai, anthropic, gemini, realtime
   llmModel: varchar("llm_model", { length: 128 }), // Model name
   llmConfig: text("llm_config"), // JSON config for LLM provider
-  
+
   // Features
   visionEnabled: integer("vision_enabled").default(0).notNull(), // 0 = false, 1 = true
   screenShareEnabled: integer("screen_share_enabled").default(0).notNull(),
   transcribeEnabled: integer("transcribe_enabled").default(0).notNull(),
-  
+
   // Multi-lingual
   languages: text("languages"), // JSON array of language codes
-  
+
   // Avatar
   avatarModel: varchar("avatar_model", { length: 255 }), // BitHuman model name
-  
+
   // Prompt/Persona
   systemPrompt: text("system_prompt"),
-  
+
+  // Initial greeting message when agent joins room
+  initial_greeting: text("initial_greeting"),
+
+  // Temperature for LLM responses (0.0 - 2.0)
+  temperature: real("temperature").default(0.6),
+
   // MCP Configuration
   mcpGatewayUrl: varchar("mcp_gateway_url", { length: 512 }),
   mcpConfig: text("mcp_config"), // JSON config for MCP
-  
+
   // Deployment
   deploymentMode: deploymentModeEnum("deployment_mode").default("shared").notNull(),
   deploymentStatus: deploymentStatusEnum("deployment_status").default("draft").notNull(),
@@ -95,11 +101,11 @@ export const agents = pgTable("agents", {
   maxConcurrentSessions: integer("max_concurrent_sessions").default(10),
   resourceLimits: text("resource_limits"), // JSON: { cpu: "2", memory: "4Gi" }
   kubernetesManifest: text("kubernetes_manifest"), // Generated K8s manifest
-  
+
   // Widget Configuration
   widgetConfig: text("widget_config"), // JSON config for widget appearance
   widgetSnippet: text("widget_snippet"), // Generated embed code
-  
+
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
