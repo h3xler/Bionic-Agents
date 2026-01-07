@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from livekit import agents, rtc
 from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent
 from livekit.plugins import google, silero
+from google.genai import types
 
 logger = logging.getLogger("dynamic-agent")
 
@@ -15,25 +16,26 @@ AGENT_BUILDER_API_URL = os.getenv("AGENT_BUILDER_API_URL", "http://agent_builder
 DEFAULT_AGENT_ID = os.getenv("DEFAULT_AGENT_ID", "1")
 
 # Map user-friendly model names to realtime audio API model names
-# For Gemini Live API (bidiGenerateContent), only specific models are supported
+# Native audio models provide better voice quality
 MODEL_NAME_MAPPING = {
-    "gemini-2.5-flash": "gemini-2.0-flash-exp",
-    "gemini-2.5-pro": "gemini-2.0-flash-exp",
-    "gemini-2.0-flash": "gemini-2.0-flash-exp",
-    "gemini-1.5-flash": "gemini-2.0-flash-exp",
-    "gemini-1.5-pro": "gemini-2.0-flash-exp",
+    "gemini-2.5-flash": "gemini-2.5-flash-native-audio-preview-09-2025",
+    "gemini-2.5-pro": "gemini-2.5-flash-native-audio-preview-09-2025",
+    "gemini-2.0-flash": "gemini-2.5-flash-native-audio-preview-09-2025",
+    "gemini-2.0-flash-exp": "gemini-2.5-flash-native-audio-preview-09-2025",
+    "gemini-1.5-flash": "gemini-2.5-flash-native-audio-preview-09-2025",
+    "gemini-1.5-pro": "gemini-2.5-flash-native-audio-preview-09-2025",
 }
 
-# Default model for Gemini Live API
-DEFAULT_REALTIME_MODEL = "gemini-2.0-flash-exp"
+# Default model for Gemini Live API - native audio for best quality
+DEFAULT_REALTIME_MODEL = "gemini-2.5-flash-native-audio-preview-09-2025"
 
 
 def get_realtime_model_name(model: str) -> str:
     """Convert user model name to realtime audio API model name"""
     if not model:
         return DEFAULT_REALTIME_MODEL
-    # If already a supported live model, return as-is
-    if model in ["gemini-2.0-flash-exp", "gemini-2.0-flash-live-001"]:
+    # If already a native audio model, return as-is
+    if "native-audio" in model:
         return model
     # Check mapping
     if model in MODEL_NAME_MAPPING:
@@ -175,6 +177,7 @@ async def entrypoint(ctx: JobContext):
         voice=config.voice,
         instructions=config.system_prompt,
         temperature=config.temperature,
+        thinking_config=types.ThinkingConfig(include_thoughts=False),
     )
     
     # Create and start session
