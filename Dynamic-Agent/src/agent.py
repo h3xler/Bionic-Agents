@@ -5,7 +5,7 @@ import httpx
 from typing import Optional
 from dataclasses import dataclass
 from livekit import agents, rtc
-from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent, room_io
+from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent
 from livekit.plugins import google, silero
 from google.genai import types
 
@@ -15,33 +15,8 @@ logger = logging.getLogger("dynamic-agent")
 AGENT_BUILDER_API_URL = os.getenv("AGENT_BUILDER_API_URL", "http://agent_builder:3000")
 DEFAULT_AGENT_ID = os.getenv("DEFAULT_AGENT_ID", "1")
 
-# Map user-friendly model names to realtime audio API model names
-# Native audio models provide better voice quality
-MODEL_NAME_MAPPING = {
-    "gemini-2.5-flash": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-2.5-pro": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-2.0-flash": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-2.0-flash-exp": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-1.5-flash": "gemini-2.5-flash-native-audio-preview-09-2025",
-    "gemini-1.5-pro": "gemini-2.5-flash-native-audio-preview-09-2025",
-}
-
 # Default model for Gemini Live API - native audio for best quality
 DEFAULT_REALTIME_MODEL = "gemini-2.5-flash-native-audio-preview-09-2025"
-
-
-def get_realtime_model_name(model: str) -> str:
-    """Convert user model name to realtime audio API model name"""
-    if not model:
-        return DEFAULT_REALTIME_MODEL
-    # If already a native audio model, return as-is
-    if "native-audio" in model:
-        return model
-    # Check mapping
-    if model in MODEL_NAME_MAPPING:
-        return MODEL_NAME_MAPPING[model]
-    # Default fallback
-    return DEFAULT_REALTIME_MODEL
 
 
 @dataclass
@@ -54,13 +29,6 @@ class AgentConfig:
     model: str
     voice: str
     temperature: float
-    language: str
-    stt_provider: str
-    tts_provider: str
-    llm_provider: str
-    vision_enabled: bool
-    screen_share_enabled: bool
-    mcp_gateway_url: str
 
 
 async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
@@ -73,22 +41,14 @@ async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
             
             if response.status_code == 200:
                 data = response.json()
-                raw_model = data.get("llmModel", "")
                 return AgentConfig(
                     agent_id=data.get("id", int(agent_id)),
                     name=data.get("name", "Assistant"),
                     system_prompt=data.get("systemPrompt", "You are a helpful assistant."),
                     initial_greeting=data.get("initialGreeting", ""),
-                    model=get_realtime_model_name(raw_model),
+                    model=DEFAULT_REALTIME_MODEL,  # Always use native audio model
                     voice=data.get("voiceId", "") or "Zephyr",
                     temperature=float(data.get("temperature", 0.6)),
-                    language=data.get("languages", "en"),
-                    stt_provider=data.get("sttProvider", "google"),
-                    tts_provider=data.get("ttsProvider", "google"),
-                    llm_provider=data.get("llmProvider", "gemini"),
-                    vision_enabled=data.get("visionEnabled", False),
-                    screen_share_enabled=data.get("screenShareEnabled", False),
-                    mcp_gateway_url=data.get("mcpGatewayUrl", "") or "",
                 )
             else:
                 logger.warning(f"Failed to fetch config: {response.status_code}")
@@ -100,7 +60,6 @@ async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
 
 def get_agent_id_from_room(room: rtc.Room) -> str:
     """Extract agent_id from room metadata or room name"""
-    # Check room metadata first
     if room.metadata:
         try:
             import json
@@ -110,10 +69,7 @@ def get_agent_id_from_room(room: rtc.Room) -> str:
         except:
             pass
     
-    # Fallback: extract from room name pattern
     room_name = room.name.lower()
-    
-    # Define room name patterns -> agent_id mapping
     patterns = {
         "support": "1",
         "translator": "2",
@@ -125,7 +81,6 @@ def get_agent_id_from_room(room: rtc.Room) -> str:
         if pattern in room_name:
             return agent_id
     
-    # Default agent
     return DEFAULT_AGENT_ID
 
 
@@ -139,13 +94,6 @@ def get_default_config() -> AgentConfig:
         model=DEFAULT_REALTIME_MODEL,
         voice="Zephyr",
         temperature=0.6,
-        language="tr",
-        stt_provider="google",
-        tts_provider="google",
-        llm_provider="gemini",
-        vision_enabled=False,
-        screen_share_enabled=False,
-        mcp_gateway_url="",
     )
 
 
@@ -179,7 +127,6 @@ async def entrypoint(ctx: JobContext):
         config = get_default_config()
     
     logger.info(f"Agent config: name={config.name}, model={config.model}, voice={config.voice}")
-    logger.info(f"Features: vision={config.vision_enabled}, screen_share={config.screen_share_enabled}, mcp={bool(config.mcp_gateway_url)}")
     
     # Create the model based on config
     model = google.realtime.RealtimeModel(
@@ -190,39 +137,15 @@ async def entrypoint(ctx: JobContext):
         thinking_config=types.ThinkingConfig(include_thoughts=False),
     )
     
-    # Create and start session
-    session = AgentSession(
-        llm=model,
-        vad=ctx.proc.userdata["vad"],
-    )
+    # Create and start session (EXACTLY like original working version)
+    session = AgentSession(llm=model, vad=ctx.proc.userdata["vad"])
     
-    # Configure room input options for vision support (only if enabled)
-    video_enabled = config.vision_enabled or config.screen_share_enabled
-    if video_enabled:
-        room_input_options = room_io.RoomInputOptions(
-            video_enabled=True,
-            video_resolution=room_io.VideoResolution.H720,
-            video_fps=1.0,
-        )
-        await session.start(
-            room=ctx.room,
-            agent=DynamicAssistant(config),
-            room_input_options=room_input_options,
-        )
-    else:
-        await session.start(
-            room=ctx.room,
-            agent=DynamicAssistant(config),
-        )
+    await session.start(room=ctx.room, agent=DynamicAssistant(config))
     
     # Send initial greeting if configured
     if config.initial_greeting:
         logger.info(f"Sending initial greeting: {config.initial_greeting[:50]}...")
         await session.generate_reply(instructions=config.initial_greeting)
-    
-    # Log MCP gateway status
-    if config.mcp_gateway_url:
-        logger.info(f"MCP Gateway configured: {config.mcp_gateway_url}")
     
     logger.info("Agent session started successfully")
 
