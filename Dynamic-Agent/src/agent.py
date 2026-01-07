@@ -5,7 +5,7 @@ import httpx
 from typing import Optional
 from dataclasses import dataclass
 from livekit import agents, rtc
-from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent
+from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent, room_io
 from livekit.plugins import google, silero
 from google.genai import types
 
@@ -58,6 +58,9 @@ class AgentConfig:
     stt_provider: str
     tts_provider: str
     llm_provider: str
+    vision_enabled: bool
+    screen_share_enabled: bool
+    mcp_gateway_url: str
 
 
 async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
@@ -83,6 +86,9 @@ async def fetch_agent_config(agent_id: str) -> Optional[AgentConfig]:
                     stt_provider=data.get("sttProvider", "google"),
                     tts_provider=data.get("ttsProvider", "google"),
                     llm_provider=data.get("llmProvider", "gemini"),
+                    vision_enabled=data.get("visionEnabled", False),
+                    screen_share_enabled=data.get("screenShareEnabled", False),
+                    mcp_gateway_url=data.get("mcpGatewayUrl", "") or "",
                 )
             else:
                 logger.warning(f"Failed to fetch config: {response.status_code}")
@@ -137,6 +143,9 @@ def get_default_config() -> AgentConfig:
         stt_provider="google",
         tts_provider="google",
         llm_provider="gemini",
+        vision_enabled=False,
+        screen_share_enabled=False,
+        mcp_gateway_url="",
     )
 
 
@@ -170,6 +179,7 @@ async def entrypoint(ctx: JobContext):
         config = get_default_config()
     
     logger.info(f"Agent config: name={config.name}, model={config.model}, voice={config.voice}")
+    logger.info(f"Features: vision={config.vision_enabled}, screen_share={config.screen_share_enabled}, mcp={bool(config.mcp_gateway_url)}")
     
     # Create the model based on config
     model = google.realtime.RealtimeModel(
@@ -180,15 +190,34 @@ async def entrypoint(ctx: JobContext):
         thinking_config=types.ThinkingConfig(include_thoughts=False),
     )
     
-    # Create and start session
-    session = AgentSession(llm=model, vad=ctx.proc.userdata["vad"])
+    # Configure room input options for vision support
+    video_enabled = config.vision_enabled or config.screen_share_enabled
+    room_input_options = room_io.RoomInputOptions(
+        video_enabled=video_enabled,
+        video_resolution=room_io.VideoResolution.H720 if video_enabled else None,
+        video_fps=1.0 if video_enabled else None,  # 1 frame per second
+    )
     
-    await session.start(room=ctx.room, agent=DynamicAssistant(config))
+    # Create and start session
+    session = AgentSession(
+        llm=model,
+        vad=ctx.proc.userdata["vad"],
+    )
+    
+    await session.start(
+        room=ctx.room,
+        agent=DynamicAssistant(config),
+        room_input_options=room_input_options,
+    )
     
     # Send initial greeting if configured
     if config.initial_greeting:
         logger.info(f"Sending initial greeting: {config.initial_greeting[:50]}...")
         await session.generate_reply(instructions=config.initial_greeting)
+    
+    # Log MCP gateway status
+    if config.mcp_gateway_url:
+        logger.info(f"MCP Gateway configured: {config.mcp_gateway_url}")
     
     logger.info("Agent session started successfully")
 
