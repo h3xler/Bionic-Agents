@@ -190,25 +190,30 @@ async def entrypoint(ctx: JobContext):
         thinking_config=types.ThinkingConfig(include_thoughts=False),
     )
     
-    # Configure room input options for vision support
-    video_enabled = config.vision_enabled or config.screen_share_enabled
-    room_input_options = room_io.RoomInputOptions(
-        video_enabled=video_enabled,
-        video_resolution=room_io.VideoResolution.H720 if video_enabled else None,
-        video_fps=1.0 if video_enabled else None,  # 1 frame per second
-    )
-    
     # Create and start session
     session = AgentSession(
         llm=model,
         vad=ctx.proc.userdata["vad"],
     )
     
-    await session.start(
-        room=ctx.room,
-        agent=DynamicAssistant(config),
-        room_input_options=room_input_options,
-    )
+    # Configure room input options for vision support (only if enabled)
+    video_enabled = config.vision_enabled or config.screen_share_enabled
+    if video_enabled:
+        room_input_options = room_io.RoomInputOptions(
+            video_enabled=True,
+            video_resolution=room_io.VideoResolution.H720,
+            video_fps=1.0,
+        )
+        await session.start(
+            room=ctx.room,
+            agent=DynamicAssistant(config),
+            room_input_options=room_input_options,
+        )
+    else:
+        await session.start(
+            room=ctx.room,
+            agent=DynamicAssistant(config),
+        )
     
     # Send initial greeting if configured
     if config.initial_greeting:
