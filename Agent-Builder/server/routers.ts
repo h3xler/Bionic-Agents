@@ -185,6 +185,7 @@ export const appRouter = router({
 
         const agentId = await createAgent({
           ...input,
+          initial_greeting: input.initialGreeting, // Map camelCase to snake_case
           userId: ctx.user.id,
           tenantId: tenant.id,
           deploymentMode: "shared", // Default to shared mode
@@ -228,8 +229,13 @@ export const appRouter = router({
           throw new Error("Agent not found or access denied");
         }
 
-        const { id, ...updates } = input;
-        await updateAgent(id, updates);
+        const { id, initialGreeting, ...updates } = input;
+        // Map camelCase to snake_case for database
+        const dbUpdates = {
+          ...updates,
+          ...(initialGreeting !== undefined && { initial_greeting: initialGreeting }),
+        };
+        await updateAgent(id, dbUpdates);
         return { success: true };
       }),
 
