@@ -6,7 +6,6 @@ from typing import Optional
 from dataclasses import dataclass
 from livekit import agents, rtc
 from livekit.agents import JobContext, WorkerOptions, AgentSession, Agent
-from google.genai import types
 from livekit.plugins import google, silero
 
 logger = logging.getLogger("dynamic-agent")
@@ -176,7 +175,6 @@ async def entrypoint(ctx: JobContext):
         voice=config.voice,
         instructions=config.system_prompt,
         temperature=config.temperature,
-        thinking_config=types.ThinkingConfig(include_thoughts=False),
     )
     
     # Create and start session
