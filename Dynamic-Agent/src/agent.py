@@ -181,14 +181,17 @@ async def entrypoint(ctx: JobContext):
             agent=DynamicAssistant(config, mcp_servers),
         )
     
+    logger.info("Agent session started successfully")
+    
     # Send initial greeting if configured
     if config.initial_greeting:
         # Wait a moment for the session to fully initialize
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
         logger.info(f"Sending initial greeting: {config.initial_greeting[:50]}...")
-        await session.say(config.initial_greeting, allow_interruptions=True)
-    
-    logger.info("Agent session started successfully")
+        # Use generate_reply with instructions to make the agent speak the greeting
+        session.generate_reply(
+            instructions=f"Greet the user by saying: {config.initial_greeting}"
+        )
 
 
 if __name__ == "__main__":
