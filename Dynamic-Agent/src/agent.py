@@ -183,8 +183,10 @@ async def entrypoint(ctx: JobContext):
     
     # Send initial greeting if configured
     if config.initial_greeting:
+        # Wait a moment for the session to fully initialize
+        await asyncio.sleep(1)
         logger.info(f"Sending initial greeting: {config.initial_greeting[:50]}...")
-        await session.generate_reply(instructions=config.initial_greeting)
+        await session.say(config.initial_greeting, allow_interruptions=True)
     
     logger.info("Agent session started successfully")
 
